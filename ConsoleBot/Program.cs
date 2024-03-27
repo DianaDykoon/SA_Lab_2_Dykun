@@ -1,4 +1,6 @@
-﻿namespace ConsoleBot
+﻿using Telegram.Bot;
+
+namespace ConsoleBot
 {
     internal class Program
     {
