@@ -6,7 +6,8 @@ namespace ConsoleBot
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello, World!");
+            BotService botService = new BotService();
+            Console.ReadLine();
         }
     }
 }
