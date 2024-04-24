@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 
 namespace ConsoleBot
@@ -92,7 +93,9 @@ namespace ConsoleBot
         private async Task SendStartMessageAsync(ChatId chatId, CancellationToken cancellationToken)
         {
             var replyKeyboardMarkup = new ReplyKeyboardMarkup(new[]
-            { new KeyboardButton[] { "Акції ❤️", "Збережені" } });
+            {
+                new KeyboardButton[] { "Акції ❤️", "Збережені" }
+            });
             replyKeyboardMarkup.ResizeKeyboard = true;
 
             await botClient.SendTextMessageAsync(chatId,
