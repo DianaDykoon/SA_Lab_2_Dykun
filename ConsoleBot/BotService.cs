@@ -15,6 +15,7 @@ namespace ConsoleBot
     public class BotService
     {
         TelegramBotClient botClient = new TelegramBotClient("6622796762:AAHQvOC1UhpobDFga4Js-JHnQVjSzzdCHVI");
+        List<Stock> stocks = new List<Stock>();
 
         public BotService()
         {
@@ -51,6 +52,10 @@ namespace ConsoleBot
             if (messageText.Contains("/"))
             {
                 await HandleCommandsAsync(message!, token);
+            }
+            else
+            {
+                await HandleButtonMessageAsync(message!, token);
             }
 
             // Echo received message text
@@ -89,6 +94,30 @@ namespace ConsoleBot
             }
         }
 
+        // Обробка натискання на кнопки
+        private async Task HandleButtonMessageAsync(Message message, CancellationToken cancellationToken)
+        {
+            var replyKeyboardMarkup = new ReplyKeyboardMarkup(new[] { new KeyboardButton[] { "Акції ❤️", "Збережені" } });
+            replyKeyboardMarkup.ResizeKeyboard = true;
+
+
+            // Check if the received message matches any of the expected button labels
+            switch (message.Text)
+            {
+                case "Акції ❤️":
+                    await SendStockMessageAsync(message.Chat, cancellationToken);
+                    break;
+                //case "Збережені":
+                //    await SendSavedMessageAsync(message.Chat, cancellationToken);
+                //    break;
+                default:
+                    var message1 = await botClient.SendTextMessageAsync(message.Chat,
+                        "Я тебе не розумію... виберіть команду будь ласка!",
+                        cancellationToken: cancellationToken);
+                    break;
+            }
+        }
+
         // Натискання на команду '/start'
         private async Task SendStartMessageAsync(ChatId chatId, CancellationToken cancellationToken)
         {
@@ -123,6 +152,44 @@ namespace ConsoleBot
         {
             var message = await botClient.SendTextMessageAsync(chatId,
                 "Виберіть команду із запропонованих.",
+                cancellationToken: cancellationToken);
+        }
+
+        private async Task SendStockMessageAsync(ChatId chatId, CancellationToken cancellationToken)
+        {
+            var replyKeyboardMarkup = new ReplyKeyboardMarkup(new[]
+            { new KeyboardButton[] { "Акції ❤️", "Збережені" } });
+            replyKeyboardMarkup.ResizeKeyboard = true;
+            string messageStock = "";
+            foreach (var stock in stocks)
+            {
+                messageStock = stock.ToString();
+                Message message = await botClient.SendPhotoAsync(
+                chatId: chatId,
+                photo: InputFile.FromUri(stock.PhotoUrl),
+                caption: messageStock,
+                parseMode: ParseMode.Html,
+                cancellationToken: cancellationToken);
+            }
+
+            var rows = new List<InlineKeyboardButton[]>();
+            var currentRow = new List<InlineKeyboardButton>();
+
+            foreach (var stock in stocks)
+            {
+                var button = InlineKeyboardButton.WithCallbackData($"{stock.Name}" + " " + $"{stock.Sale:F1}%", $"stock_{stock.Id}");
+
+                currentRow.Add(button);
+
+                rows.Add(currentRow.ToArray());
+                currentRow.Clear();
+            }
+
+            InlineKeyboardMarkup inlineKeyboard = rows.ToArray();
+
+            var message2 = await botClient.SendTextMessageAsync(chatId,
+                "Виберіть акцію, яку хочете зберігти:",
+                replyMarkup: inlineKeyboard,
                 cancellationToken: cancellationToken);
         }
     }
