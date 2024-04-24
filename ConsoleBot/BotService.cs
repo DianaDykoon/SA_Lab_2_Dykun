@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -16,10 +18,24 @@ namespace ConsoleBot
     {
         TelegramBotClient botClient = new TelegramBotClient("6622796762:AAHQvOC1UhpobDFga4Js-JHnQVjSzzdCHVI");
         List<Stock> stocks = new List<Stock>();
+        Dictionary<long, List<Stock>> userSavedStockProducts = new Dictionary<long, List<Stock>>();
+
+        Stock testStock = new Stock("Holika Holika",
+        "BB-крем з перлинною пудрою для надання сатинового сяйва" +
+        " Holika Holika Shimmering Petit BB Cream SPF45 / PA +++, 30 мл", 257.00f, 204.00f, "Eva", "https://eva.ua/ua/pr105252/",
+        "https://github.com/DianaDykoon/Lab_7_Dykun/raw/master/images/HolikaPetitBB.jpg");
+
+
+        Stock testStock2 = new Stock("Maybelline New York",
+            "Туш для вій Maybelline New York Volum' Express Classic, екстра чорна, 10 мл",
+            189.00f, 151.00f, "makeup", "https://makeup.com.ua/ua/product/524823/",
+            "https://github.com/DianaDykoon/Lab_7_Dykun/raw/master/images/MaybelineNewYorkMascara.jpg");
 
         public BotService()
         {
             botClient.StartReceiving(OnUpdate, OnError);
+            stocks.Add(testStock);
+            stocks.Add(testStock2);
         }
 
         private Task OnError(ITelegramBotClient client, Exception exception, CancellationToken token)
@@ -37,19 +53,31 @@ namespace ConsoleBot
 
         private async Task OnUpdate(ITelegramBotClient client, Update update, CancellationToken token)
         {
-            // Only process Message updates: https://core.telegram.org/bots/api#message
-            if (update.Message is not { } message )
-               return;
-            // Only process text messages
-            if (message.Text is not { } messageText)
-                return;
+            var message = update.Message;
+            var messageText = message?.Text;
 
-            var chatId = message.Chat.Id;
+            long chatId;
+            if (messageText != null)
+                chatId = message!.Chat.Id;
+            else
+                chatId = update.CallbackQuery!.Message!.Chat.Id;
 
             Console.WriteLine($"Received a '{messageText}' message in chat {chatId} from {message?.Chat.FirstName}.");
 
+            if (!userSavedStockProducts.ContainsKey(chatId))
+            {
+                // Створення списку збережених акційних товарів
+                // Для нового користувача
+                userSavedStockProducts[chatId] = new List<Stock>();
+            }
+
             // Обробка повідомлень від користувача
-            if (messageText.Contains("/"))
+            if (update.Type == UpdateType.CallbackQuery)
+            {
+                Console.WriteLine($"Inline callback data: {update.CallbackQuery?.Data}");
+                await HandleInlineKeyboardButtonAsync(chatId, update.CallbackQuery!, token);
+            }
+            else if (messageText!.Contains("/"))
             {
                 await HandleCommandsAsync(message!, token);
             }
@@ -57,21 +85,6 @@ namespace ConsoleBot
             {
                 await HandleButtonMessageAsync(message!, token);
             }
-
-            // Echo received message text
-            //Message sentMessage = await botClient.SendTextMessageAsync(
-            //    chatId: chatId,
-            //    text: "> " + messageText,
-            //    cancellationToken: token
-            //    );
-            //if (messageText == "photo")
-            //{
-            //    Message phMessage = await botClient.SendPhotoAsync(
-            //    chatId: chatId,
-            //    photo: InputFile.FromUri("https://github.com/TelegramBots/book/raw/master/src/docs/photo-ara.jpg"),
-            //    cancellationToken: token
-            //   );
-            //}
         }
 
         // Обробка натискання на команди з меню команд
@@ -107,9 +120,9 @@ namespace ConsoleBot
                 case "Акції ❤️":
                     await SendStockMessageAsync(message.Chat, cancellationToken);
                     break;
-                //case "Збережені":
-                //    await SendSavedMessageAsync(message.Chat, cancellationToken);
-                //    break;
+                case "Збережені":
+                    await SendSavedMessageAsync(message.Chat, cancellationToken);
+                    break;
                 default:
                     var message1 = await botClient.SendTextMessageAsync(message.Chat,
                         "Я тебе не розумію... виберіть команду будь ласка!",
@@ -177,7 +190,8 @@ namespace ConsoleBot
 
             foreach (var stock in stocks)
             {
-                var button = InlineKeyboardButton.WithCallbackData($"{stock.Name}" + " " + $"{stock.Sale:F1}%", $"stock_{stock.Id}");
+                var button = InlineKeyboardButton.WithCallbackData(text: $"{stock.Name}" + " " + $"{stock.Sale:F1}%",
+                    callbackData: $"stock_{stock.Id}");
 
                 currentRow.Add(button);
 
@@ -191,6 +205,81 @@ namespace ConsoleBot
                 "Виберіть акцію, яку хочете зберігти:",
                 replyMarkup: inlineKeyboard,
                 cancellationToken: cancellationToken);
+        }
+
+        private async Task SendSavedMessageAsync(ChatId chatId, CancellationToken cancellationToken)
+        {
+            if (userSavedStockProducts.ContainsKey((long)chatId.Identifier) && userSavedStockProducts[(long)chatId.Identifier].Count != 0)
+            {
+                var replyKeyboardMarkup = new ReplyKeyboardMarkup(new[]
+                { new KeyboardButton[] { "Акції ❤️", "Збережені" } });
+                replyKeyboardMarkup.ResizeKeyboard = true;
+
+                float sum = 0;
+                string messageSaved = " Ваші збережені товари\n";
+                foreach (var product in userSavedStockProducts[(long)chatId.Identifier])
+                {
+                    messageSaved += $"\n{product.Name} | {product.NewPrice}\n {product.Description}";
+                    sum += product.NewPrice;
+                }
+                messageSaved += "\n\n";
+                messageSaved += $"Вартість всіх збережених товарів: {sum:F2}₴";
+
+                var message = await botClient.SendTextMessageAsync(chatId, messageSaved, replyMarkup: replyKeyboardMarkup);
+            }
+            else
+            {
+                var message = await botClient.SendTextMessageAsync(chatId, "На даний момент у вас не має збережених товарів");
+            }
+        }
+
+        private async Task HandleInlineKeyboardButtonAsync(long chatId, CallbackQuery callbackQuery, CancellationToken cancellationToken)
+        {
+            var replyKeyboardMarkup = new ReplyKeyboardMarkup(new[]
+            { new KeyboardButton[] { "Акції ❤️", "Збережені" } });
+            replyKeyboardMarkup.ResizeKeyboard = true;
+
+            botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
+            string data = callbackQuery.Data!;
+
+            int stockId = int.Parse(data.Split("_")[1]);
+            var stock = stocks.FirstOrDefault(p => p.Id == stockId);
+
+            
+            if (stock != null)
+            {
+                if (userSavedStockProducts[chatId].Contains(stock))
+                {
+                    Message sendInfoMessage = await botClient.SendTextMessageAsync(
+                    chatId: chatId,
+                    $"Ви вже зберігали товар {stock.Name}, оберіть інший 😅",
+                    parseMode: ParseMode.Html,
+                    replyMarkup: replyKeyboardMarkup,
+                    cancellationToken: cancellationToken);
+
+                }
+
+                else
+                {
+                    userSavedStockProducts[chatId].Add(stock);
+
+                    Message sendMessage = await botClient.SendTextMessageAsync(
+                    chatId: chatId,
+                    $"Товар {stock.Name} успішно збережено",
+                    parseMode: ParseMode.Html,
+                    replyMarkup: replyKeyboardMarkup,
+                    cancellationToken: cancellationToken);
+                }
+            }
+            else
+            {
+                Message sendMessage = await botClient.SendTextMessageAsync(
+                chatId: chatId,
+                "Не розумію тебе",
+                parseMode: ParseMode.Html,
+                replyMarkup: replyKeyboardMarkup,
+                cancellationToken: cancellationToken);
+            }
         }
     }
 }
