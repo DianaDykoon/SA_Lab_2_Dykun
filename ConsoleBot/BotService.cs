@@ -93,7 +93,7 @@ namespace ConsoleBot
             switch (message.Text)
             {
                 case "/start":
-                    await SendStartMessageAsync(message.Chat, cancellationToken);
+                    await SendStartMessageAsync(message, message.Chat, cancellationToken);
                     break;
                 case "/quit":
                     await SendQuitMessageAsync(message.Chat, cancellationToken);
@@ -113,14 +113,23 @@ namespace ConsoleBot
             var replyKeyboardMarkup = new ReplyKeyboardMarkup(new[] { new KeyboardButton[] { "Акції ❤️", "Збережені" } });
             replyKeyboardMarkup.ResizeKeyboard = true;
 
-
-            // Check if the received message matches any of the expected button labels
             switch (message.Text)
             {
                 case "Акції ❤️":
                     await SendStockMessageAsync(message.Chat, cancellationToken);
                     break;
-                case "Збережені":
+
+                case "Eva 💚":
+                    await SendStockFromEvaMessageAsync(message.Chat, cancellationToken);
+                    break;
+                case "makeup \U0001f5a4":
+                    await SendStockFromMakeupMessageAsync(message.Chat, cancellationToken);
+                    break;
+                case "⬅️ Повернутись":
+                    await SendBackMessageAsync(message.Chat, cancellationToken);
+                    break;
+                
+                case "Збережені ✅":
                     await SendSavedMessageAsync(message.Chat, cancellationToken);
                     break;
                 default:
@@ -132,16 +141,16 @@ namespace ConsoleBot
         }
 
         // Натискання на команду '/start'
-        private async Task SendStartMessageAsync(ChatId chatId, CancellationToken cancellationToken)
+        private async Task SendStartMessageAsync(Message message, ChatId chatId, CancellationToken cancellationToken)
         {
             var replyKeyboardMarkup = new ReplyKeyboardMarkup(new[]
             {
-                new KeyboardButton[] { "Акції ❤️", "Збережені" }
+                new KeyboardButton[] { "Акції ❤️", "Збережені ✅" }
             });
             replyKeyboardMarkup.ResizeKeyboard = true;
 
             await botClient.SendTextMessageAsync(chatId,
-                "Доброго дня 👋, виберіть команду.", 
+                $"Доброго дня 👋, {message.Chat.FirstName}, виберіть команду.", 
                 replyMarkup: replyKeyboardMarkup, 
                 cancellationToken: cancellationToken);
         }
@@ -151,7 +160,11 @@ namespace ConsoleBot
         {
             var replyKeyboardMarkup = new ReplyKeyboardMarkup(new[] { new KeyboardButton[] { "/start" }, });
             replyKeyboardMarkup.ResizeKeyboard = true;
-            var message = await botClient.SendTextMessageAsync(chatId, "Гарного вам дня, ще побачимось!", replyMarkup: replyKeyboardMarkup, cancellationToken: cancellationToken);
+
+            var message = await botClient.SendTextMessageAsync(chatId,
+                "До побачення!",
+                replyMarkup: replyKeyboardMarkup,
+                cancellationToken: cancellationToken);
         }
 
         // Натискання на команду '/help'
@@ -168,21 +181,38 @@ namespace ConsoleBot
                 cancellationToken: cancellationToken);
         }
 
-        private async Task SendStockMessageAsync(ChatId chatId, CancellationToken cancellationToken)
+        // Натискання на кнопку "Акції"
+        private async Task SendStockMessageAsync(Chat chatId, CancellationToken cancellationToken)
         {
             var replyKeyboardMarkup = new ReplyKeyboardMarkup(new[]
-            { new KeyboardButton[] { "Акції ❤️", "Збережені" } });
+            {
+                new KeyboardButton[] { "Eva 💚", "makeup 🖤" },
+                new KeyboardButton[] { "⬅️ Повернутись" },
+            });
             replyKeyboardMarkup.ResizeKeyboard = true;
+
+            await botClient.SendTextMessageAsync(chatId,
+                "Оберіть магазин, для перегляду акцій. 😉",
+                replyMarkup: replyKeyboardMarkup,
+                cancellationToken: cancellationToken);
+        }
+
+        // Натискання на кнопку "Eva"
+        private async Task SendStockFromEvaMessageAsync(Chat chatId, CancellationToken cancellationToken)
+        {
             string messageStock = "";
             foreach (var stock in stocks)
             {
-                messageStock = stock.ToString();
-                Message message = await botClient.SendPhotoAsync(
-                chatId: chatId,
-                photo: InputFile.FromUri(stock.PhotoUrl),
-                caption: messageStock,
-                parseMode: ParseMode.Html,
-                cancellationToken: cancellationToken);
+                if (stock.Store == "Eva")
+                {
+                    messageStock = stock.ToString();
+                    Message message = await botClient.SendPhotoAsync(
+                    chatId: chatId,
+                    photo: InputFile.FromUri(stock.PhotoUrl),
+                    caption: messageStock,
+                    parseMode: ParseMode.Html,
+                    cancellationToken: cancellationToken);
+                }
             }
 
             var rows = new List<InlineKeyboardButton[]>();
@@ -190,13 +220,16 @@ namespace ConsoleBot
 
             foreach (var stock in stocks)
             {
-                var button = InlineKeyboardButton.WithCallbackData(text: $"{stock.Name}" + " " + $"{stock.Sale:F1}%",
-                    callbackData: $"stock_{stock.Id}");
+                if (stock.Store == "Eva")
+                {
+                    var button = InlineKeyboardButton.WithCallbackData(text: $"{stock.Name}" + " " + $"-{stock.Sale:F1}%",
+                        callbackData: $"stock_{stock.Id}");
 
-                currentRow.Add(button);
+                    currentRow.Add(button);
 
-                rows.Add(currentRow.ToArray());
-                currentRow.Clear();
+                    rows.Add(currentRow.ToArray());
+                    currentRow.Clear();
+                }
             }
 
             InlineKeyboardMarkup inlineKeyboard = rows.ToArray();
@@ -207,25 +240,88 @@ namespace ConsoleBot
                 cancellationToken: cancellationToken);
         }
 
+        // Натискання на кнопку "makeup"
+        private async Task SendStockFromMakeupMessageAsync(ChatId chatId, CancellationToken cancellationToken)
+        {
+            string messageStock = "";
+            foreach (var stock in stocks)
+            {
+                if (stock.Store == "makeup")
+                {
+                    messageStock = stock.ToString();
+                    Message message = await botClient.SendPhotoAsync(
+                    chatId: chatId,
+                    photo: InputFile.FromUri(stock.PhotoUrl),
+                    caption: messageStock,
+                    parseMode: ParseMode.Html,
+                    cancellationToken: cancellationToken);
+                }
+            }
+
+            var rows = new List<InlineKeyboardButton[]>();
+            var currentRow = new List<InlineKeyboardButton>();
+
+            foreach (var stock in stocks)
+            {
+                if (stock.Store == "makeup")
+                {
+                    var button = InlineKeyboardButton.WithCallbackData(text: $"{stock.Name}" + " " + $"-{stock.Sale:F1}%",
+                        callbackData: $"stock_{stock.Id}");
+
+                    currentRow.Add(button);
+
+                    rows.Add(currentRow.ToArray());
+                    currentRow.Clear();
+                }
+            }
+
+            InlineKeyboardMarkup inlineKeyboard = rows.ToArray();
+
+            var message2 = await botClient.SendTextMessageAsync(chatId,
+                "Виберіть акцію, яку хочете зберігти:",
+                replyMarkup: inlineKeyboard,
+                cancellationToken: cancellationToken);
+        }
+
+        // Натискання на кнопку "Повернутись"
+        private async Task SendBackMessageAsync(ChatId chatId, CancellationToken cancellationToken)
+        {
+            var replyKeyboardMarkup = new ReplyKeyboardMarkup(new[]
+            {
+                new KeyboardButton[] { "Акції ❤️", "Збережені ✅" }
+            });
+            replyKeyboardMarkup.ResizeKeyboard = true;
+
+            await botClient.SendTextMessageAsync(chatId,
+                $"Виберіть команду:",
+                replyMarkup: replyKeyboardMarkup,
+                cancellationToken: cancellationToken);
+        }
+
+        // Натискання на кнопку "Збережені"
         private async Task SendSavedMessageAsync(ChatId chatId, CancellationToken cancellationToken)
         {
             if (userSavedStockProducts.ContainsKey((long)chatId.Identifier) && userSavedStockProducts[(long)chatId.Identifier].Count != 0)
             {
                 var replyKeyboardMarkup = new ReplyKeyboardMarkup(new[]
-                { new KeyboardButton[] { "Акції ❤️", "Збережені" } });
+                { new KeyboardButton[] { "Акції ❤️", "Збережені ✅" } });
                 replyKeyboardMarkup.ResizeKeyboard = true;
 
                 float sum = 0;
                 string messageSaved = " Ваші збережені товари\n";
                 foreach (var product in userSavedStockProducts[(long)chatId.Identifier])
                 {
-                    messageSaved += $"\n{product.Name} | {product.NewPrice}\n {product.Description}";
+                    messageSaved += $"\n\n👉 <b>{product.Name}</b> | {product.NewPrice}\n {product.Description}";
                     sum += product.NewPrice;
                 }
                 messageSaved += "\n\n";
                 messageSaved += $"Вартість всіх збережених товарів: {sum:F2}₴";
 
-                var message = await botClient.SendTextMessageAsync(chatId, messageSaved, replyMarkup: replyKeyboardMarkup);
+                var message = await botClient.SendTextMessageAsync(
+                    chatId,
+                    messageSaved,
+                    parseMode: ParseMode.Html,
+                    replyMarkup: replyKeyboardMarkup);
             }
             else
             {
@@ -233,10 +329,11 @@ namespace ConsoleBot
             }
         }
 
+        // Вибір акційного товару на кнопки
         private async Task HandleInlineKeyboardButtonAsync(long chatId, CallbackQuery callbackQuery, CancellationToken cancellationToken)
         {
             var replyKeyboardMarkup = new ReplyKeyboardMarkup(new[]
-            { new KeyboardButton[] { "Акції ❤️", "Збережені" } });
+            { new KeyboardButton[] { "Акції ❤️", "Збережені ✅" } });
             replyKeyboardMarkup.ResizeKeyboard = true;
 
             botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
@@ -252,11 +349,10 @@ namespace ConsoleBot
                 {
                     Message sendInfoMessage = await botClient.SendTextMessageAsync(
                     chatId: chatId,
-                    $"Ви вже зберігали товар {stock.Name}, оберіть інший 😅",
+                    $"Ви вже зберігли цей товар, оберіть інший 😅",
                     parseMode: ParseMode.Html,
                     replyMarkup: replyKeyboardMarkup,
                     cancellationToken: cancellationToken);
-
                 }
 
                 else
@@ -275,7 +371,7 @@ namespace ConsoleBot
             {
                 Message sendMessage = await botClient.SendTextMessageAsync(
                 chatId: chatId,
-                "Не розумію тебе",
+                "Товар не знайдено",
                 parseMode: ParseMode.Html,
                 replyMarkup: replyKeyboardMarkup,
                 cancellationToken: cancellationToken);
